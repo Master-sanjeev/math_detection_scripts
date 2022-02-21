@@ -47,7 +47,7 @@ import matplotlib.pyplot as plt
 from flask import Flask, request
 from flask import jsonify
 from posix import POSIX_FADV_WILLNEED
-
+import json
 
 
 
@@ -80,7 +80,7 @@ category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABE
 
 color_map = {1:8, 2:98}
 
-def infer(IMAGE_PATH):
+def infer(IMAGE_PATH, pg_no, content):
   start = time.time()
   print('Running inference for {}... '.format(IMAGE_PATH))
   image = cv2.imread(IMAGE_PATH)
@@ -104,7 +104,8 @@ def infer(IMAGE_PATH):
   for num in detections['detection_classes']:
     arr.append(color_map[num])
 
-  utils.visualize_boxes_and_labels_on_image_array(
+  filtered_boxes = utils.visualize_boxes_and_labels_on_image_array(
+        pg_no,
         image_with_detections,
         detections['detection_boxes'],
         detections['detection_classes'],
@@ -123,6 +124,8 @@ def infer(IMAGE_PATH):
   cv2.imwrite(os.path.join(IMAGE_PATH), image_with_detections)
   print("Write time : ", time.time()-end, "seconds")
 
+  #save the detected boxes to content
+  content[pg_no] = filtered_boxes
 
 
 
@@ -132,10 +135,29 @@ app = Flask(__name__)
 def hello():
     if request.method == "POST":
         # print(request.data)
-        f = open("new_file.png", "wb")
+
+        #content will contain a map of page -> detected bounding boxes
+        content ={}
+        #save the received pdf file on server
+        try:
+          os.mkdir("pdf")
+        except:
+          pass
+        f = open("pdf/new_file.pdf", "wb")
         f.write(request.data)
         f.close()
-        infer("new_file.png")
+
+        #save the images from pdf
+        try:
+          os.mkdir("images")
+        except:
+          pass
+        os.system("python3 create_images_from_pdf.py pdf images")
+
+        #infer for rach image
+        for image in os.listdir("images"):
+          image_path = os.path.join("images", image)
+          infer(image_path, image.split('.')[0], content)
         # os.system("rm -rf darknet/aidetect && mkdir darknet/aidetect/")
         # cmdToRun = "cp new_file.png darknet/"
         # print("Copying new_file.png to darknet/")
@@ -151,12 +173,17 @@ def hello():
     # f = open("darknet/aidetect/0.json", "rb")
     # content = f.read()
     # # print(content)
-    f = open("new_file.png", 'rb')
-    content = f.read()
+
+    # f = open("new_file.png", 'rb')
+    # content = f.read()
+
+    print(content)
     resp = jsonify(success=True)
-    resp.data = content
+    resp.data = json.dumps(content)
     resp.status_code = 200
     
+    os.system("rm -rf images")
+    os.system("rm -rf pdf")
 
     return resp
 

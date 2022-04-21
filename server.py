@@ -125,7 +125,7 @@ def infer(IMAGE_PATH, pg_no, content):
   print("Write time : ", time.time()-end, "seconds")
 
   #save the detected boxes to content
-  content[pg_no] = filtered_boxes
+  content['P'+pg_no] = filtered_boxes
 
 
 
